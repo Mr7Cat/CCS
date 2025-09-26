@@ -1,7 +1,7 @@
 {
   "name": "cc-switcher",
   "version": "1.0.0",
-  "description": "A Node.js tool for switching between different AI model providers when using Claude Code",
+  "description": "A Node.js tool for switching between different AI model providers when using Claude Code with interactive configuration support",
   "main": "src/index.js",
   "bin": {
     "ccs": "bin/ccs.js"
@@ -34,7 +34,7 @@
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "fs-extra": "^11.2.0",
-    "inquirer": "^9.2.12",
+    "inquirer": "^8.2.6",
     "os-homedir": "^2.0.0"
   },
   "devDependencies": {

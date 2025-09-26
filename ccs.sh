@@ -1263,6 +1263,214 @@ edit_config() {
     fi
 }
 
+# 交互式添加配置
+interactive_add_config() {
+    echo -e "${BLUE}🚀 交互式配置向导${NC}"
+    echo -e "${YELLOW}正在引导您添加新的API配置...${NC}"
+    echo ""
+
+    # 选择提供商
+    echo -e "${BLUE}1. 选择API提供商:${NC}"
+    echo "1) Deepseek (推荐)"
+    echo "2) KIMI2 (月之暗面)"
+    echo "3) GLM4.5 (智谱清言)"
+    echo "4) Qwen (通义千问)"
+    echo "5) LongCat (美团)"
+    echo "6) Claude API"
+    echo "7) 退出"
+    echo ""
+
+    while true; do
+        read -p "请选择提供商 (1-7): " provider_choice
+        case $provider_choice in
+            1) PROVIDER="DEEPSEEK"; PROVIDER_NAME="Deepseek"; break;;
+            2) PROVIDER="KIMI"; PROVIDER_NAME="KIMI2"; break;;
+            3) PROVIDER="GLM"; PROVIDER_NAME="GLM4.5"; break;;
+            4) PROVIDER="QWEN"; PROVIDER_NAME="Qwen"; break;;
+            5) PROVIDER="LONGCAT"; PROVIDER_NAME="LongCat"; break;;
+            6) PROVIDER="CLAUDE"; PROVIDER_NAME="Claude API"; break;;
+            7) echo -e "${YELLOW}配置已取消${NC}"; return 0;;
+            *) echo -e "${RED}无效选择，请输入1-7${NC}";;
+        esac
+    done
+
+    echo -e "${GREEN}✅ 已选择: $PROVIDER_NAME${NC}"
+    echo ""
+
+    # 输入API密钥
+    echo -e "${BLUE}2. 配置API密钥:${NC}"
+    echo -e "${YELLOW}提示: 可以配置多个密钥用于负载均衡${NC}"
+
+    declare -a API_KEYS=()
+    local key_count=1
+
+    while true; do
+        read -s -p "请输入第${key_count}个API密钥 (留空完成): " api_key
+        echo ""
+
+        if [[ -z "$api_key" ]]; then
+            if [[ ${#API_KEYS[@]} -eq 0 ]]; then
+                echo -e "${RED}❌ 至少需要配置一个API密钥${NC}"
+                continue
+            else
+                break
+            fi
+        fi
+
+        # 简单验证API密钥格式
+        if [[ "$PROVIDER" == "DEEPSEEK" ]] && [[ ! "$api_key" =~ ^sk-.+ ]]; then
+            echo -e "${YELLOW}⚠️  Deepseek API密钥通常以 'sk-' 开头${NC}"
+        elif [[ "$PROVIDER" == "CLAUDE" ]] && [[ ! "$api_key" =~ ^sk-.+ ]]; then
+            echo -e "${YELLOW}⚠️  Claude API密钥通常以 'sk-' 开头${NC}"
+        fi
+
+        API_KEYS+=("$api_key")
+        echo -e "${GREEN}✅ 已添加第${key_count}个密钥${NC}"
+        ((key_count++))
+
+        if [[ $key_count -gt 5 ]]; then
+            echo -e "${YELLOW}⚠️  已添加5个密钥，建议完成配置${NC}"
+            read -p "是否继续添加? (y/N): " continue_add
+            if [[ ! "$continue_add" =~ ^[Yy] ]]; then
+                break
+            fi
+        fi
+    done
+
+    echo -e "${GREEN}✅ 共配置了 ${#API_KEYS[@]} 个API密钥${NC}"
+    echo ""
+
+    # 选择轮换策略（如果有多个密钥）
+    local rotation_strategy="round_robin"
+    if [[ ${#API_KEYS[@]} -gt 1 ]]; then
+        echo -e "${BLUE}3. 选择密钥轮换策略:${NC}"
+        echo "1) round_robin - 轮询使用 (推荐)"
+        echo "2) load_balance - 负载均衡"
+        echo "3) smart - 智能选择"
+        echo ""
+
+        while true; do
+            read -p "请选择策略 (1-3, 默认1): " strategy_choice
+            case ${strategy_choice:-1} in
+                1) rotation_strategy="round_robin"; break;;
+                2) rotation_strategy="load_balance"; break;;
+                3) rotation_strategy="smart"; break;;
+                *) echo -e "${RED}无效选择，请输入1-3${NC}";;
+            esac
+        done
+
+        echo -e "${GREEN}✅ 已选择策略: $rotation_strategy${NC}"
+        echo ""
+    fi
+
+    # 特殊配置项
+    local base_url=""
+    if [[ "$PROVIDER" == "CLAUDE" ]]; then
+        echo -e "${BLUE}4. Claude API配置:${NC}"
+        read -p "请输入Base URL (留空使用默认): " base_url
+        if [[ -z "$base_url" ]]; then
+            base_url="https://api.aicodemirror.com/api/claudecode"
+        fi
+        echo -e "${GREEN}✅ Base URL: $base_url${NC}"
+        echo ""
+    elif [[ "$PROVIDER" == "QWEN" ]]; then
+        echo -e "${BLUE}4. Qwen API配置:${NC}"
+        read -p "请输入Anthropic兼容端点URL (留空跳过): " base_url
+        if [[ -n "$base_url" ]]; then
+            echo -e "${GREEN}✅ Anthropic兼容端点: $base_url${NC}"
+        fi
+        echo ""
+    fi
+
+    # 显示配置摘要
+    echo -e "${BLUE}📋 配置摘要:${NC}"
+    echo -e "${YELLOW}提供商:${NC} $PROVIDER_NAME"
+    echo -e "${YELLOW}密钥数量:${NC} ${#API_KEYS[@]}"
+    if [[ ${#API_KEYS[@]} -gt 1 ]]; then
+        echo -e "${YELLOW}轮换策略:${NC} $rotation_strategy"
+    fi
+    if [[ -n "$base_url" ]]; then
+        echo -e "${YELLOW}Base URL:${NC} $base_url"
+    fi
+    echo ""
+
+    # 确认保存
+    read -p "确认保存配置? (Y/n): " confirm
+    if [[ "$confirm" =~ ^[Nn] ]]; then
+        echo -e "${YELLOW}配置已取消${NC}"
+        return 0
+    fi
+
+    # 备份原配置
+    if [[ -f "$CONFIG_FILE" ]]; then
+        cp "$CONFIG_FILE" "${CONFIG_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+        echo -e "${GREEN}✅ 已备份原配置文件${NC}"
+    fi
+
+    # 确保配置文件存在
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        create_default_config
+    fi
+
+    # 构建要添加的配置行
+    local config_lines=()
+
+    # 添加单个密钥配置（向后兼容）
+    config_lines+=("")
+    config_lines+=("# $PROVIDER_NAME 配置 ($(date '+%Y-%m-%d %H:%M:%S') 添加)")
+    config_lines+=("${PROVIDER}_API_KEY=${API_KEYS[0]}")
+
+    # 添加多密钥数组配置
+    if [[ ${#API_KEYS[@]} -gt 1 ]]; then
+        local keys_array="${PROVIDER}_API_KEYS=("
+        for key in "${API_KEYS[@]}"; do
+            keys_array+="$key "
+        done
+        keys_array+=")"
+        config_lines+=("$keys_array")
+        config_lines+=("${PROVIDER}_ROTATION_STRATEGY=$rotation_strategy")
+    fi
+
+    # 添加特殊配置
+    if [[ "$PROVIDER" == "CLAUDE" && -n "$base_url" ]]; then
+        config_lines+=("CLAUDE_BASE_URL=$base_url")
+    elif [[ "$PROVIDER" == "QWEN" && -n "$base_url" ]]; then
+        config_lines+=("QWEN_ANTHROPIC_BASE_URL=$base_url")
+    fi
+
+    # 写入配置文件
+    for line in "${config_lines[@]}"; do
+        echo "$line" >> "$CONFIG_FILE"
+    done
+
+    echo ""
+    echo -e "${GREEN}🎉 配置添加成功!${NC}"
+    echo -e "${YELLOW}💡 使用方法:${NC}"
+    case $PROVIDER in
+        "DEEPSEEK") echo -e "${BLUE}  eval \"\$(./ccs.sh deepseek)\"${NC}";;
+        "KIMI") echo -e "${BLUE}  eval \"\$(./ccs.sh kimi)\"${NC}";;
+        "GLM") echo -e "${BLUE}  eval \"\$(./ccs.sh glm)\"${NC}";;
+        "QWEN") echo -e "${BLUE}  eval \"\$(./ccs.sh qwen)\"${NC}";;
+        "LONGCAT") echo -e "${BLUE}  eval \"\$(./ccs.sh longcat)\"${NC}";;
+        "CLAUDE") echo -e "${BLUE}  eval \"\$(./ccs.sh claude)\"${NC}";;
+    esac
+    echo -e "${YELLOW}💡 查看状态:${NC} ${BLUE}./ccs.sh status${NC}"
+
+    # 询问是否立即切换
+    echo ""
+    read -p "是否立即切换到新配置? (y/N): " switch_now
+    if [[ "$switch_now" =~ ^[Yy] ]]; then
+        case $PROVIDER in
+            "DEEPSEEK") eval "$(emit_env_exports deepseek)" && echo -e "${GREEN}✅ 已切换到Deepseek${NC}";;
+            "KIMI") eval "$(emit_env_exports kimi)" && echo -e "${GREEN}✅ 已切换到KIMI2${NC}";;
+            "GLM") eval "$(emit_env_exports glm)" && echo -e "${GREEN}✅ 已切换到GLM4.5${NC}";;
+            "QWEN") eval "$(emit_env_exports qwen)" && echo -e "${GREEN}✅ 已切换到Qwen${NC}";;
+            "LONGCAT") eval "$(emit_env_exports longcat)" && echo -e "${GREEN}✅ 已切换到LongCat${NC}";;
+            "CLAUDE") eval "$(emit_env_exports claude)" && echo -e "${GREEN}✅ 已切换到Claude API${NC}";;
+        esac
+    fi
+}
+
 # 仅输出 export 语句的环境设置（用于 eval）
 emit_env_exports() {
     local target="$1"

@@ -4,6 +4,7 @@ const { Command } = require('commander');
 const chalk = require('chalk');
 const { spawn } = require('child_process');
 const CCS = require('../src/index');
+const InteractiveConfig = require('../src/interactive');
 
 const program = new Command();
 
@@ -173,8 +174,16 @@ program
   .command('config')
   .alias('cfg')
   .description('编辑配置文件')
-  .action(async () => {
+  .option('-i, --interactive', '使用交互式配置向导')
+  .action(async (options) => {
     try {
+      if (options.interactive) {
+        const ccs = await new CCS().init();
+        const interactiveConfig = new InteractiveConfig(ccs.configManager);
+        await interactiveConfig.startWizard();
+        return;
+      }
+
       const ccs = await new CCS().init();
       const configPath = await ccs.editConfig();
 
@@ -223,6 +232,22 @@ program
     }
   });
 
+// Interactive command
+program
+  .command('interactive')
+  .alias('i')
+  .description('启动交互式配置向导')
+  .action(async () => {
+    try {
+      const ccs = await new CCS().init();
+      const interactiveConfig = new InteractiveConfig(ccs.configManager);
+      await interactiveConfig.startWizard();
+    } catch (error) {
+      console.error(chalk.red(`❌ ${error.message}`));
+      process.exit(1);
+    }
+  });
+
 // Env command for shell evaluation
 program
   .command('env <provider>')
@@ -261,6 +286,8 @@ program
     console.log('  status --detailed  - 显示所有 key 的详细状态');
     console.log('  env [模型]         - 仅输出 export 语句（用于 eval）');
     console.log('  config, cfg        - 编辑配置文件');
+    console.log('  config -i, cfg -i  - 使用交互式配置向导');
+    console.log('  interactive, i     - 启动交互式配置向导');
     console.log('  stats              - 显示使用统计');
     console.log('  rotate [提供商]    - 手动轮换到下一个 key');
     console.log('  test-keys [提供商] - 测试所有 key 的可用性');
@@ -269,6 +296,8 @@ program
     console.log(chalk.yellow('示例:'));
     console.log('  eval "$(ccs deepseek)"      # 在当前 shell 中生效（推荐）');
     console.log('  ccs status                  # 查看当前状态（脱敏）');
+    console.log('  ccs interactive             # 启动交互式配置向导');
+    console.log('  ccs config -i               # 使用交互式向导配置API');
     console.log();
     console.log(chalk.yellow('支持的模型:'));
     console.log('  🌙 KIMI2               - 官方：kimi-k2-0905-preview');
