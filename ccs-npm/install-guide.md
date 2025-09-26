@@ -75,11 +75,34 @@ npm install -g claude-code-switch
 
 ### 本地开发安装
 
-```bash
-cd ccs-npm/
-npm install
-npm link  # 创建全局链接
-```
+  开发模式安装
+
+  cd ccs-npm/
+  npm install
+  npm link  # 创建全局链接，这样可以在任何地方使用 ccs 命令
+
+  开发模式卸载
+
+  cd ccs-npm/
+  npm unlink -g  # 移除全局链接
+  # 或者
+  npm unlink cc-switcher -g  # 使用包名移除
+
+  验证安装/卸载
+
+  # 检查是否已安装
+  which ccs
+  ccs --help
+
+  # 如果卸载成功，这些命令应该找不到 ccs
+
+  重新开发测试
+
+  cd ccs-npm/
+  npm install      # 安装依赖
+  npm test         # 运行测试
+  npm run lint     # 代码检查
+  npm link         # 重新创建链接
 
 ## 使用方法
 
